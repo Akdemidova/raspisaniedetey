@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Расписание занятий — Алиса, Володя, Элина</title>
+<style>
+  *{box-sizing:border-box}
+  :root{
+    --hour-h: 42px;         /* переопределяется JS-ом под высоту окна */
+    --line:#e8ecf1;
+    --line2:#f4f7fa;
+    --border:#e2e8f0;
+    --text:#0f172a;
+    --muted:#64748b;
+  }
+  html,body{height:100%}
+  body{
+    margin:0;
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    background:#f5f7fa;
+    color:var(--text);
+    -webkit-print-color-adjust:exact;
+    print-color-adjust:exact;
+  }
+  .app{max-width:1400px;margin:0 auto;padding:14px 16px}
+
+  .toolbar{
+    display:flex; flex-wrap:wrap; gap:10px; align-items:center;
+    justify-content:space-between; margin-bottom:10px;
+  }
+  .toolbar h1{font-size:17px; margin:0; letter-spacing:-.01em}
+  .btns{display:flex; flex-wrap:wrap; gap:6px}
+  .btn{
+    appearance:none; border:1px solid var(--border); background:#fff; color:var(--text);
+    padding:6px 11px; border-radius:8px; font-size:12px; font-weight:550; cursor:pointer;
+    transition: background .12s, border-color .12s, transform .08s;
+    font-family:inherit;
+  }
+  .btn:hover{background:#f1f5f9}
+  .btn:active{transform:translateY(1px)}
+  .btn.primary{background:#2563eb; border-color:#2563eb; color:#fff}
+  .btn.primary:hover{background:#1d4ed8}
+  .btn.danger{color:#b91c1c; border-color:#fecaca}
+  .btn.danger:hover{background:#fef2f2}
+
+  /* ---------- Фильтр ---------- */
+  .filter{
+    display:flex; flex-wrap:wrap; gap:6px; align-items:center;
+    margin-bottom:10px; padding:7px 10px;
+    background:#fff; border:1px solid var(--border); border-radius:10px;
+  }
+  .filter-label{font-size:11.5px; color:var(--muted); font-weight:600; margin-right:2px}
+  .chip{
+    display:inline-flex; align-items:center; gap:6px;
+    padding:4px 10px; border-radius:999px; font-size:12px; font-weight:600;
+    border:1.5px solid var(--c); color:var(--c);
+    background:#fff; cursor:pointer; user-select:none;
+    transition: background .12s, opacity .12s;
+    font-family:inherit;
+  }
+  .chip:hover{background:var(--bg)}
+  .chip .dot{width:8px;height:8px;border-radius:50%;background:var(--c);transition:transform .12s}
+  .chip.active{background:var(--bg)}
+  .chip:not(.active){opacity:.45; border-color:#cbd5e1; color:#94a3b8}
+  .chip:not(.active) .dot{background:#cbd5e1}
+  .chip-actions{display:flex; gap:5px; margin-left:auto}
+  .mini-btn{
+    font-family:inherit; font-size:11.5px; font-weight:550;
+    border:1px solid var(--border); background:#fff; color:var(--muted);
+    border-radius:6px; padding:4px 9px; cursor:pointer;
+  }
+  .mini-btn:hover{background:#f1f5f9; color:var(--text)}
+
+  /* ---------- Сетка ---------- */
+  .grid{
+    display:grid;
+    background:#fff;
+    border:1px solid var(--border);
+    border-radius:12px;
+    overflow:hidden;
+    box-shadow:0 1px 3px rgba(15,23,42,.07);
+  }
+  .corner{background:#fbfcfe;border-bottom:1px solid var(--border);border-right:1px solid var(--border)}
+  .day-head{
+    background:#fbfcfe; border-bottom:1px solid var(--border); border-right:1px solid var(--border);
+    padding:6px 4px; text-align:center; font-weight:650; font-size:12px; letter-spacing:.01em;
+  }
+  .day-head.weekend{background:#fffaf3; color:#b45309}
+  .time-col{
+    position:relative; background:#fbfcfe; border-right:1px solid var(--border);
+    height:calc(14 * var(--hour-h));
+  }
+  .hour-label{
+    position:absolute; right:6px; margin-top:1px;
+    font-size:10px; color:var(--muted); font-variant-numeric:tabular-nums;
+  }
+  .day-col{
+    position:relative; border-right:1px solid var(--border);
+    height:calc(14 * var(--hour-h));
+    background-image:
+      repeating-linear-gradient(to bottom, var(--line) 0 1px, transparent 1px var(--hour-h)),
+      repeating-linear-gradient(to bottom, var(--line2) 0 1px, transparent 1px calc(var(--hour-h)/2));
+    background-position: 0 -1px;
+  }
+  .day-col.weekend{background-color:#fdfbf7}
+  .day-col:last-child, .day-head:last-child{border-right:none}
+
+  .lesson{
+    position:absolute;
+    border-radius:6px;
+    border-left:3px solid var(--c);
+    background:var(--bg);
+    padding:2px 5px;
+    overflow:hidden;
+    cursor:pointer;
+    font-size:11px;
+    line-height:1.2;
+    box-shadow:0 1px 2px rgba(15,23,42,.09);
+    transition: box-shadow .1s, transform .1s;
+  }
+  .lesson:hover{box-shadow:0 4px 12px rgba(15,23,42,.2); z-index:5; transform:translateY(-1px)}
+  .ls-title{font-weight:650; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+  .ls-meta{font-size:9.5px; color:#475569; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+  .ls-child{color:var(--c); font-weight:600}
+
+  .hint{margin-top:8px; font-size:11px; color:var(--muted)}
+
+  /* ---------- Модалка ---------- */
+  .overlay{
+    position:fixed; inset:0; z-index:100; display:none;
+    align-items:center; justify-content:center; padding:16px;
+    background:rgba(15,23,42,.45); backdrop-filter:blur(2px);
+  }
+  .overlay.open{display:flex}
+  .modal{
+    background:#fff; border-radius:14px; padding:18px; width:100%; max-width:400px;
+    box-shadow:0 24px 60px rgba(15,23,42,.35);
+    display:flex; flex-direction:column; gap:10px;
+  }
+  .modal h2{margin:0 0 2px; font-size:16px}
+  .modal label{display:flex; flex-direction:column; gap:4px; font-size:11.5px; color:var(--muted); font-weight:550}
+  .modal input, .modal select{
+    font-family:inherit; font-size:13.5px; color:var(--text);
+    padding:7px 10px; border:1px solid var(--border); border-radius:8px; background:#fff; width:100%;
+  }
+  .modal input:focus, .modal select:focus{outline:2px solid #bfdbfe; outline-offset:0; border-color:#93c5fd}
+  .row{display:grid; grid-template-columns:1fr 1fr; gap:10px}
+  .modal-actions{display:flex; gap:8px; align-items:center; margin-top:4px}
+  .spacer{flex:1}
+
+  @media print{
+    :root{ --hour-h: 40px !important; }
+    @page{ size: A4 landscape; margin: 8mm; }
+    body{background:#fff}
+    .app{max-width:none; padding:0}
+    .no-print{display:none !important}
+    .grid{box-shadow:none; border-radius:0; border-color:#cbd5e1}
+    .lesson{box-shadow:none !important; transform:none !important}
+    .filter{display:none}
+  }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <header class="toolbar">
+    <h1>📚 Расписание занятий</h1>
+    <div class="btns no-print">
+      <button class="btn primary" id="addBtn">+ Занятие</button>
+      <button class="btn" id="printBtn">🖨 Печать</button>
+      <button class="btn" id="exportBtn">⬇ Экспорт</button>
+      <button class="btn" id="importBtn">⬆ Импорт</button>
+      <button class="btn danger" id="clearBtn">Очистить</button>
+      <input type="file" id="fileInput" accept=".json,application/json" hidden>
+    </div>
+  </header>
+
+  <div class="filter no-print">
+    <span class="filter-label">Показать:</span>
+    <div id="chips" style="display:flex;flex-wrap:wrap;gap:6px"></div>
+    <div class="chip-actions">
+      <button class="mini-btn" id="allBtn">Все</button>
+      <button class="mini-btn" id="noneBtn">Никого</button>
+    </div>
+  </div>
+
+  <div class="grid" id="grid"></div>
+
+  <div class="hint no-print">Клик по пустому месту — добавить. Клик по занятию — редактировать. Сохранение — автоматическое.</div>
+</div>
+
+<div class="overlay" id="overlay">
+  <form class="modal" id="form">
+    <h2 id="modalTitle">Новое занятие</h2>
+
+    <label>Ребёнок
+      <select id="fChild"></select>
+    </label>
+
+    <label>День недели
+      <select id="fDay"></select>
+    </label>
+
+    <div class="row">
+      <label>Начало
+        <input type="time" id="fStart" min="08:00" max="22:00" step="300" required>
+      </label>
+      <label>Окончание
+        <input type="time" id="fEnd" min="08:00" max="22:00" step="300" required>
+      </label>
+    </div>
+
+    <label>Название
+      <input type="text" id="fTitle" maxlength="60" placeholder="Математика">
+    </label>
+
+    <div class="modal-actions">
+      <button type="button" class="btn danger" id="delBtn">Удалить</button>
+      <span class="spacer"></span>
+      <button type="button" class="btn" id="cancelBtn">Отмена</button>
+      <button type="submit" class="btn primary">Сохранить</button>
+    </div>
+  </form>
+</div>
+
+<script>
+/* ======================= КОНФИГ ======================= */
+const CHILDREN = [
+  { id:'alisa',  name:'Алиса',  color:'#db2777', bg:'#fce7f3' },
+  { id:'volodya',name:'Володя', color:'#2563eb', bg:'#dbeafe' },
+  { id:'elina',  name:'Элина',  color:'#059669', bg:'#d1fae5' },
+];
+const CHILD_BY_ID = Object.fromEntries(CHILDREN.map(c=>[c.id,c]));
+
+const DAYS      = ['Понедельник','Вторник','Среда','Четверг','Пятница','Суббота','Воскресенье'];
+const DAYS_SHORT= ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
+
+const DAY_START = 8*60;
+const DAY_END   = 22*60;
+const SPAN      = DAY_END - DAY_START;
+
+const KEY = 'kids-schedule-v2';
+
+/* ======================= АВТО-ПОДГОНКА ВЫСОТЫ ======================= */
+/* Считаем доступную высоту и подбираем высоту часа так, чтобы вся сетка
+   (14 часов) + интерфейс влезали в окно без прокрутки. */
+function fitHeight(){
+  const used = 14 /* paddings */ + 44 /* toolbar */ + 44 /* filter */ + 24 /* hint */ + 30 /* head grid */;
+  const avail = window.innerHeight - used;
+  const perHour = Math.floor(avail / 14);
+  const h = Math.max(24, Math.min(60, perHour));
+  document.documentElement.style.setProperty('--hour-h', h + 'px');
+}
+fitHeight();
+window.addEventListener('resize', fitHeight);
+
+/* ======================= УТИЛИТЫ ======================= */
+const $ = id => document.getElementById(id);
+const el = (tag, cls) => { const d = document.createElement(tag); if (cls) d.className = cls; return d; };
+const toMin = t => { const [h,m] = String(t).split(':').map(Number); return h*60 + (m||0); };
+const toHHMM = m => String(Math.floor(m/60)).padStart(2,'0') + ':' + String(m%60).padStart(2,'0');
+const clamp = (v,a,b) => Math.max(a, Math.min(b, v));
+const pct = m => ((m - DAY_START) / SPAN * 100) + '%';
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,7);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+/* ======================= ДАННЫЕ ======================= */
+let lessons = load();
+let visible = new Set(CHILDREN.map(c => c.id));
+
+function load(){
+  try{
+    const raw = localStorage.getItem(KEY);
+    if (raw){
+      const data = JSON.parse(raw);
+      if (Array.isArray(data)) return data.filter(x => x && x.id && x.child && x.start && x.end);
+    }
+  }catch(e){ console.warn('Не удалось прочитать сохранение', e); }
+  return demoData();
+}
+function save(){
+  try{ localStorage.setItem(KEY, JSON.stringify(lessons)); }
+  catch(e){ alert('Не удалось сохранить: ' + e.message); }
+}
+function demoData(){
+  const mk = (child, day, start, end, title) =>
+    ({ id: uid(), child, day, start, end, title });
+  return [
+    mk('alisa',   0, '09:00','10:30','Математика'),
+    mk('volodya', 0, '09:30','11:00','Английский'),
+    mk('elina',   0, '15:00','16:00','Рисование'),
+    mk('alisa',   1, '14:00','15:00','Музыка'),
+    mk('volodya', 2, '09:00','09:45','Физкультура'),
+    mk('elina',   2, '11:00','12:30','Логопед'),
+    mk('alisa',   3, '16:00','17:30','Программирование'),
+    mk('volodya', 4, '13:00','14:00','Шахматы'),
+    mk('elina',   4, '10:00','11:00','Хореография'),
+    mk('alisa',   5, '11:00','12:00','Плавание'),
+    mk('elina',   5, '11:30','12:30','Вокал'),
+  ];
+}
+
+/* ======================= РАСКЛАДКА ПЕРЕСЕЧЕНИЙ ======================= */
+function layoutDay(dayLessons){
+  const items = dayLessons
+    .map(l => ({ ...l, s: toMin(l.start), e: toMin(l.end) }))
+    .sort((a,b) => a.s - b.s || a.e - b.e);
+
+  const clusters = [];
+  let cur = [], curEnd = -Infinity;
+  for (const it of items){
+    if (cur.length && it.s >= curEnd){ clusters.push(cur); cur = []; curEnd = -Infinity; }
+    cur.push(it);
+    curEnd = Math.max(curEnd, it.e);
+  }
+  if (cur.length) clusters.push(cur);
+
+  const out = [];
+  for (const cluster of clusters){
+    const laneEnds = [];
+    for (const it of cluster){
+      let lane = laneEnds.findIndex(end => end <= it.s);
+      if (lane === -1){ lane = laneEnds.length; laneEnds.push(it.e); }
+      else laneEnds[lane] = it.e;
+      it.lane = lane;
+    }
+    const n = laneEnds.length;
+    for (const it of cluster){ it.lanes = n; out.push(it); }
+  }
+  return out;
+}
+
+/* ======================= ОТРИСОВКА ======================= */
+const grid = $('grid');
+
+function render(){
+  grid.innerHTML = '';
+  grid.style.gridTemplateColumns = '54px repeat(7, minmax(0,1fr))';
+
+  grid.appendChild(el('div','corner'));
+  DAYS_SHORT.forEach((d,i) => {
+    const h = el('div', 'day-head' + (i >= 5 ? ' weekend' : ''));
+    h.textContent = d;
+    grid.appendChild(h);
+  });
+
+  const tcol = el('div','time-col');
+  for (let t = DAY_START; t < DAY_END; t += 60){
+    const lab = el('div','hour-label');
+    lab.style.top = pct(t);
+    lab.textContent = toHHMM(t);
+    tcol.appendChild(lab);
+  }
+  grid.appendChild(tcol);
+
+  for (let d = 0; d < 7; d++){
+    const col = el('div', 'day-col' + (d >= 5 ? ' weekend' : ''));
+    col.dataset.day = d;
+
+    const dayLessons = lessons.filter(l =>
+      Number(l.day) === d && visible.has(l.child)
+    );
+    layoutDay(dayLessons).forEach(l => col.appendChild(makeLessonEl(l)));
+    grid.appendChild(col);
+  }
+}
+
+function makeLessonEl(l){
+  const child = CHILD_BY_ID[l.child] || CHILDREN[0];
+  const s = toMin(l.start), e = toMin(l.end);
+
+  const node = el('div','lesson');
+  node.dataset.id = l.id;
+  node.style.setProperty('--c', child.color);
+  node.style.setProperty('--bg', child.bg);
+  node.style.top    = pct(s);
+  node.style.height = `calc(${(e - s) / SPAN * 100}% - 2px)`;
+  node.style.left   = `calc(${(l.lane / l.lanes) * 100}% + 2px)`;
+  node.style.width  = `calc(${(1 / l.lanes) * 100}% - 4px)`;
+  node.title = `${child.name} · ${l.title || 'Занятие'} · ${l.start}–${l.end}`;
+
+  node.innerHTML =
+    `<div class="ls-title">${esc(l.title || 'Занятие')}</div>` +
+    `<div class="ls-meta"><span class="ls-child">${esc(child.name)}</span> · ${l.start}–${l.end}</div>`;
+
+  return node;
+}
+
+/* ======================= ФИЛЬТР ======================= */
+function renderChips(){
+  const box = $('chips');
+  box.innerHTML = '';
+  CHILDREN.forEach(c => {
+    const chip = el('button', 'chip' + (visible.has(c.id) ? ' active' : ''));
+    chip.type = 'button';
+    chip.style.setProperty('--c', c.color);
+    chip.style.setProperty('--bg', c.bg);
+    chip.dataset.child = c.id;
+    chip.innerHTML = `<span class="dot"></span>${esc(c.name)}`;
+    chip.addEventListener('click', () => {
+      if (visible.has(c.id)) visible.delete(c.id);
+      else visible.add(c.id);
+      renderChips(); render();
+    });
+    box.appendChild(chip);
+  });
+}
+$('allBtn').addEventListener('click', () => {
+  visible = new Set(CHILDREN.map(c => c.id));
+  renderChips(); render();
+});
+$('noneBtn').addEventListener('click', () => {
+  visible = new Set();
+  renderChips(); render();
+});
+
+/* ======================= МОДАЛКА ======================= */
+const overlay = $('overlay'), form = $('form');
+const fChild = $('fChild'), fDay = $('fDay'), fStart = $('fStart'),
+      fEnd = $('fEnd'), fTitle = $('fTitle');
+const modalTitle = $('modalTitle'), delBtn = $('delBtn');
+let editingId = null;
+
+CHILDREN.forEach(c => fChild.add(new Option(c.name, c.id)));
+DAYS.forEach((d,i) => fDay.add(new Option(d, i)));
+
+function openModal(id, preset){
+  editingId = id || null;
+  const existing = id ? lessons.find(l => l.id === id) : null;
+  const data = existing || Object.assign(
+    { child: 'alisa', day: 0, start: '09:00', end: '10:00', title: '' },
+    preset || {}
+  );
+
+  fChild.value = data.child;
+  fDay.value   = data.day;
+  fStart.value = data.start;
+  fEnd.value   = data.end;
+  fTitle.value = data.title || '';
+
+  modalTitle.textContent = existing ? 'Редактировать занятие' : 'Новое занятие';
+  delBtn.style.display = existing ? '' : 'none';
+
+  overlay.classList.add('open');
+  setTimeout(() => fTitle.focus(), 40);
+}
+function closeModal(){
+  overlay.classList.remove('open');
+  editingId = null;
+}
+
+form.addEventListener('submit', e => {
+  e.preventDefault();
+  const s = toMin(fStart.value), en = toMin(fEnd.value);
+  if (en <= s){ alert('Время окончания должно быть позже времени начала.'); return; }
+  if (s < DAY_START || en > DAY_END){
+    alert('Время занятий: с 08:00 до 22:00.');
+    return;
+  }
+  const payload = {
+    child: fChild.value,
+    day: Number(fDay.value),
+    start: fStart.value,
+    end: fEnd.value,
+    title: fTitle.value.trim(),
+  };
+
+  if (editingId){
+    const i = lessons.findIndex(l => l.id === editingId);
+    if (i > -1) lessons[i] = { ...lessons[i], ...payload };
+  } else {
+    lessons.push({ id: uid(), ...payload });
+  }
+
+  save(); render(); closeModal();
+});
+
+delBtn.addEventListener('click', () => {
+  if (!editingId) return;
+  if (!confirm('Удалить это занятие?')) return;
+  lessons = lessons.filter(l => l.id !== editingId);
+  save(); render(); closeModal();
+});
+
+$('cancelBtn').addEventListener('click', closeModal);
+overlay.addEventListener('mousedown', e => { if (e.target === overlay) closeModal(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && overlay.classList.contains('open')) closeModal(); });
+
+/* ======================= КЛИКИ ПО СЕТКЕ ======================= */
+grid.addEventListener('click', e => {
+  const lessonEl = e.target.closest('.lesson');
+  if (lessonEl){ openModal(lessonEl.dataset.id); return; }
+
+  const col = e.target.closest('.day-col');
+  if (!col) return;
+
+  const rect = col.getBoundingClientRect();
+  let mins = DAY_START + ((e.clientY - rect.top) / rect.height) * SPAN;
+  mins = Math.round(mins / 15) * 15;
+  mins = clamp(mins, DAY_START, DAY_END - 30);
+
+  const visibleChild = CHILDREN.find(c => visible.has(c.id));
+
+  openModal(null, {
+    child: visibleChild ? visibleChild.id : 'alisa',
+    day: Number(col.dataset.day),
+    start: toHHMM(mins),
+    end: toHHMM(Math.min(mins + 60, DAY_END)),
+  });
+});
+
+/* ======================= КНОПКИ ======================= */
+$('addBtn').addEventListener('click', () => {
+  const visibleChild = CHILDREN.find(c => visible.has(c.id));
+  openModal(null, { child: visibleChild ? visibleChild.id : 'alisa' });
+});
+$('printBtn').addEventListener('click', () => window.print());
+
+$('exportBtn').addEventListener('click', () => {
+  const blob = new Blob([JSON.stringify(lessons, null, 2)], { type:'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'raspisanie-' + new Date().toISOString().slice(0,10) + '.json';
+  a.click();
+  URL.revokeObjectURL(url);
+});
+
+$('importBtn').addEventListener('click', () => $('fileInput').click());
+$('fileInput').addEventListener('change', e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try{
+      const data = JSON.parse(reader.result);
+      if (!Array.isArray(data)) throw new Error('Ожидался массив занятий');
+      const clean = data.map(x => {
+        if (!x || !x.start || !x.end) return null;
+        const s  = clamp(toMin(x.start), DAY_START, DAY_END);
+        const en = clamp(toMin(x.end),   DAY_START, DAY_END);
+        if (en <= s) return null;
+        return {
+          id: x.id || uid(),
+          child: CHILD_BY_ID[x.child] ? x.child : 'alisa',
+          day: clamp(Number(x.day) || 0, 0, 6),
+          start: toHHMM(s),
+          end: toHHMM(en),
+          title: String(x.title || ''),
+        };
+      }).filter(Boolean);
+      lessons = clean;
+      save(); render();
+      alert('Загружено занятий: ' + clean.length);
+    }catch(err){
+      alert('Не удалось импортировать: ' + err.message);
+    }finally{
+      e.target.value = '';
+    }
+  };
+  reader.readAsText(file);
+});
+
+$('clearBtn').addEventListener('click', () => {
+  if (!confirm('Удалить все занятия? Действие необратимо.')) return;
+  lessons = [];
+  save(); render();
+});
+
+/* ======================= СТАРТ ======================= */
+renderChips();
+render();
+</script>
+</body>
+</html>
